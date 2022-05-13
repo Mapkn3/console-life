@@ -1,7 +1,8 @@
 package my.mapkn3;
 
 import java.util.Set;
-import java.util.stream.IntStream;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.function.Predicate.not;
@@ -14,18 +15,26 @@ public class Main {
     public static void main(String[] args) throws InterruptedException {
         System.out.print("\033[2J");
         System.out.flush();
-        var cells = Set.of(new Cell(5, 5), new Cell(1, 0), new Cell(2, 1), new Cell(0, 2), new Cell(1, 2), new Cell(2, 2));
-        gen(cells, 100);
+//        var cells = Set.of(new Cell(6, 5), new Cell(7, 6), new Cell(5, 7), new Cell(6, 7), new Cell(7, 7));
+        var cells = range(0, 20)
+                .mapToObj(y -> range(0, 20)
+                        .mapToObj(x -> new Cell(x, y))
+                        .filter(ignore -> ThreadLocalRandom.current().nextBoolean())
+                        .collect(Collectors.toSet()))
+                .flatMap(Set::stream)
+                .collect(toSet());
+        gen(cells, 1000);
         System.out.print("\033[H");
         System.out.flush();
     }
 
     public record Cell(int x, int y) {
         public Stream<Cell> nb() {
-            return IntStream.range(x() - 1, x() + 2)
+            return range(x() - 1, x() + 2)
                     .boxed()
-                    .flatMap(x -> IntStream.range(y() - 1, y() + 2)
+                    .flatMap(x -> range(y() - 1, y() + 2)
                             .mapToObj(y -> new Cell(x, y)))
+                    .map(cell -> new Cell(normalize(cell.x), normalize(cell.y)))
                     .filter(not(this::equals));
         }
 
@@ -33,6 +42,16 @@ public class Main {
             var count = nb().filter(cells::contains).count();
             return (cells.contains(this) && count == 2) || count == 3;
         }
+    }
+
+    public static int normalize(int i) {
+        if (i < 0) {
+            return i + 20;
+        }
+        if (i >= 20) {
+            return i - 20;
+        }
+        return i;
     }
 
     public static Set<Cell> evolve(Set<Cell> cells) {
@@ -43,26 +62,21 @@ public class Main {
                 .collect(toSet());
     }
 
-    public static void print(Set<Cell> cells) throws InterruptedException {
+    public static void print(Set<Cell> cells, int steps) throws InterruptedException {
         System.out.print("\033[H");
         System.out.flush();
-        var min = new Cell(cells.stream().mapToInt(Cell::x).min().getAsInt(),
-                cells.stream().mapToInt(Cell::y).min().getAsInt());
-        var max = new Cell(cells.stream().mapToInt(Cell::x).max().getAsInt(),
-                cells.stream().mapToInt(Cell::y).max().getAsInt());
-
-        range(min.y(), max.y() + 1)
-                .mapToObj(y -> range(min.x(), max.x() + 1)
-                        .mapToObj(x -> cells.contains(new Cell(x, y)) ? "X" : ".")
-                        .collect(joining("")))
+        System.out.printf("Generation: %05d | Alive: %05d\n", steps, cells.size());
+        range(0, 20)
+                .mapToObj(y -> range(0, 20)
+                        .mapToObj(x -> cells.contains(new Cell(x, y)) ? "■" : "□")
+//                        .mapToObj(x -> cells.contains(new Cell(x, y)) ? "■" : " ")
+                        .collect(joining(" ")))
                 .forEach(System.out::println);
         Thread.sleep(100);
-
-        cells.forEach(System.out::println);
     }
 
     public static void gen(Set<Cell> cells, int steps) throws InterruptedException {
-        print(cells);
+        print(cells, steps);
         if (steps > 0) {
             gen(evolve(cells), steps - 1);
         }
